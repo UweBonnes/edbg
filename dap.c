@@ -331,7 +331,10 @@ uint32_t dap_read_reg(uint8_t reg)
   buf[2] = 0x01; // Request size
   buf[3] = reg | DAP_TRANSFER_RnW;
   dbg_dap_cmd(buf, sizeof(buf), 4);
-
+  if ((1 == buf[0]) & (buf[1] == DAP_TRANSFER_FAULT)) {
+	  dap_write_reg(SWD_DP_W_ABORT, DP_ABORT_STKCMPCLR | DP_ABORT_STKERRCLR | DP_ABORT_ORUNERRCLR);
+	  buf[1] = DAP_TRANSFER_OK;
+  }
   if (1 != buf[0] || DAP_TRANSFER_OK != buf[1])
   {
     error_exit("invalid response while reading the register 0x%02x (count = %d, value = %d)",
