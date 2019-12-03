@@ -1,5 +1,5 @@
-COMPILER ?= gcc
-UNAME ?= $(shell uname)
+COMPILER ?= $(CC)
+UNAME ?= $(shell $(CC) -dumpmachine)
 
 SRCS = \
   dap.c \
@@ -20,12 +20,12 @@ HDRS = \
   edbg.h \
   target.h
 
-ifeq ($(UNAME), Linux)
+ifneq (, $(findstring linux, $(SYS)))
   BIN = edbg
   SRCS += dbg_lin.c
   LIBS += -ludev
 else
-  ifeq ($(UNAME), Darwin)
+  ifneq (, $(findstring darwin, $(SYS)))
     BIN = edbg
     SRCS += dbg_mac.c
     LIBS += hidapi/mac/.libs/libhidapi.a
