@@ -325,24 +325,30 @@ void dap_reset_pin(int state)
 uint32_t dap_read_reg(uint8_t reg)
 {
   uint8_t buf[8];
+  int i = 0;
+  do {
+	  buf[0] = ID_DAP_TRANSFER;
+	  buf[1] = 0x00; // DAP index
+	  buf[2] = 0x01; // Request size
+	  buf[3] = reg | DAP_TRANSFER_RnW;
+	  dbg_dap_cmd(buf, sizeof(buf), 4);
+	  if (i > 0)
+		  printf("retry dap_read_reg addr %02x (count = %d, value = %d)\n", reg, buf[0],  buf[1]);
+	  i++;
+	  if ((1 == buf[0]) & (buf[1] == DAP_TRANSFER_FAULT)) {
+		  dap_write_reg(SWD_DP_W_ABORT, DP_ABORT_STKCMPCLR | DP_ABORT_STKERRCLR | DP_ABORT_ORUNERRCLR);
+		  buf[1] = DAP_TRANSFER_OK;
+	  }
+  } while ((0 == buf[0]) && (DAP_TRANSFER_WAIT & buf[1]) && (i < 10));
 
-  buf[0] = ID_DAP_TRANSFER;
-  buf[1] = 0x00; // DAP index
-  buf[2] = 0x01; // Request size
-  buf[3] = reg | DAP_TRANSFER_RnW;
-  dbg_dap_cmd(buf, sizeof(buf), 4);
-  if ((1 == buf[0]) & (buf[1] == DAP_TRANSFER_FAULT)) {
-	  dap_write_reg(SWD_DP_W_ABORT, DP_ABORT_STKCMPCLR | DP_ABORT_STKERRCLR | DP_ABORT_ORUNERRCLR);
-	  buf[1] = DAP_TRANSFER_OK;
-  }
   if (1 != buf[0] || DAP_TRANSFER_OK != buf[1])
   {
-    error_exit("invalid response while reading the register 0x%02x (count = %d, value = %d)",
+    printf("invalid response while reading the register 0x%02x (count = %d, value = %d)",
         reg, buf[0], buf[1]);
   }
-
-  return ((uint32_t)buf[5] << 24) | ((uint32_t)buf[4] << 16) |
-         ((uint32_t)buf[3] << 8) | (uint32_t)buf[2];
+  uint32_t res =  ((uint32_t)buf[5] << 24) | ((uint32_t)buf[4] << 16) |
+	  ((uint32_t)buf[3] << 8) | (uint32_t)buf[2];
+  return res;
 }
 
 //-----------------------------------------------------------------------------
@@ -464,12 +470,13 @@ void dap_read_block(uint32_t addr, uint8_t *data, int size)
     sz = (size > max_size) ? max_size : size;
     sz = (sz > align) ? align : sz;
 
+	int len = (sz + 3) / 4;
     dap_write_reg(SWD_AP_TAR, addr);
 
     buf[0] = ID_DAP_TRANSFER_BLOCK;
     buf[1] = 0x00; // DAP index
-    buf[2] = (sz / 4) & 0xff;
-    buf[3] = ((sz / 4) >> 8) & 0xff;
+    buf[2] = len & 0xff;
+    buf[3] = (len >> 8) & 0xff;
     buf[4] = SWD_AP_DRW | DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP;
     dbg_dap_cmd(buf, sizeof(buf), 5);
 
